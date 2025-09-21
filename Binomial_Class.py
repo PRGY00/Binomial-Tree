@@ -27,7 +27,7 @@ class Binomial:
         # number of steps in tree simulation
         steps = int(T/delta)
         # matrix creation
-        tree_matrix = np.array([np.array([0] * (steps+1)) for _ in range(steps+1)])
+        tree_matrix = np.array([np.array([0] * (steps+1)) for _ in range(steps+1)], dtype=float)
         # initial value at time 0
         tree_matrix[steps][0] = S
 
@@ -37,32 +37,42 @@ class Binomial:
 
         return tree_matrix
 
-    def option_pricing(self, K: float, delta: float, tree_matrix: float | np.ndarray, is_call: bool=True) -> float | np.ndarray:
+    def european_option_pricing(self, K: float, delta: float, tree_matrix: float | np.ndarray, is_call: bool=True) -> float:
+        pass
+
+    def american_option_pricing(self, K: float, delta: float, tree_matrix: float | np.ndarray, is_call: bool=True) -> float | np.ndarray:
 
         p = (np.exp(self.r*delta) - self.d) / (self.u - self.d)
         size = len(tree_matrix)
+        # matrix with payoffs
         option_payoff_matrix = np.maximum(0, (-1)**(1-is_call) * (tree_matrix - K))
-
-        # european
+        # matrix with option values (at different time points
+        option_value_matrix = copy.deepcopy(option_payoff_matrix)
+        # matrix execution moments
+        option_exec_matrix = copy.deepcopy(option_payoff_matrix)
+        # matrix execution moments - last column valuation
+        option_exec_matrix[:, size-1] = option_payoff_matrix[:, size-1] > 0
 
         # american
         for i in range(1, size):
             for j in range(i, size):
-                print(f'i:{i}, j:{j}')
-                option_payoff_matrix[j][size-i] = np.exp(-self.r * delta) * (p*option_payoff_matrix[j-1][size-i] + (1-p)*option_payoff_matrix[j][size-i])
+                # print(f'i:{i}, j:{j}')
+                risk_neutral_valuation = np.exp(-self.r * delta) * (p*option_value_matrix[j-1, size-i] + (1-p)*option_value_matrix[j, size-i])
+                option_value_matrix[j, size-i-1] = np.maximum(risk_neutral_valuation, option_payoff_matrix[j, size-i-1])
+                option_exec_matrix[j, size-i-1] = risk_neutral_valuation < option_payoff_matrix[j, size-i-1]
 
-        return option_payoff_matrix
+        return option_value_matrix
 
 
 # TESTS ################################################################################################################
-Binomial_Tree = Binomial(1.1, 0.9, 0.01, 0.15)
+Binomial_Tree = Binomial(1.1, 0.9, 0.05, 0.15)
 asset_price_tree = Binomial_Tree.binomial_price_tree(S=100, T=5, delta=1)
 
-print(np.maximum(0, asset_price_tree - 100))
-asset_price_tree_df = pd.DataFrame(asset_price_tree)
-print(asset_price_tree_df)
+print(asset_price_tree)
+print(np.maximum(asset_price_tree - 100, 0))
 
-option_value_tree = Binomial_Tree.option_pricing(K=100, delta=1, tree_matrix=asset_price_tree)
-option_value_tree_df = pd.DataFrame(option_value_tree)
-print(option_value_tree_df)
+option_value_tree = Binomial_Tree.american_option_pricing(K=100, delta=1, tree_matrix=asset_price_tree)
+print(option_value_tree)
+# option_value_tree_df = pd.DataFrame(option_value_tree)
+# print(option_value_tree_df)
 
